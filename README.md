@@ -42,12 +42,12 @@ Python 3.10+
 ## 安装
 将插件文件夹放入 KiraAI 的 `data/plugins/` 目录：
 data/plugins/
-└── KiraAI-plugins-qq_file_manager/
-   ├── __init__.py
-   ├── main.py
-   ├── manifest.json
-   ├── schema.json
-   └── README.md
+└── KiraAI-plugins-qq_file_manager/  
+   ├── __init__.py  
+   ├── main.py  
+   ├── manifest.json  
+   ├── schema.json  
+   └── README.md  
 
 
 ## 配置
