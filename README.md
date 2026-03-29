@@ -40,8 +40,8 @@ NapCatQQ（QQ 适配器）
 Python 3.10+
 
 ## 安装
-将插件文件夹放入 KiraAI 的 `data/plugins/` 目录：
-data/plugins/
+将插件文件夹放入 KiraAI 的 `data/plugins/` 目录：  
+data/plugins/  
 └── KiraAI-plugins-qq_file_manager/  
    ├── __init__.py  
    ├── main.py  
@@ -89,57 +89,57 @@ data/plugins/
 ```
 
 ### 使用示例
-用户对话示例
-用户：帮我看看这个群有哪些文件
-AI：调用 qq_list_files(group_id="1234567")
-AI：群里有 2 个文件和 1 个文件夹：
-    📁 文件夹：ceshi
-    📄 文件：图片1.jpg、文档.pdf
+用户对话示例  
+用户：帮我看看这个群有哪些文件  
+AI：调用 qq_list_files(group_id="1234567")  
+AI：群里有 2 个文件和 1 个文件夹：  
+    📁 文件夹：ceshi  
+    📄 文件：图片1.jpg、文档.pdf  
 
-用户：把图片1.jpg移动到 ceshi 文件夹
-AI：调用 qq_move_file(group_id="1234567", file_name="图片1.jpg", folder_name="ceshi")
-AI：✅ 文件 '图片1.jpg' 已移动到文件夹 'ceshi'
+用户：把图片1.jpg移动到 ceshi 文件夹  
+AI：调用 qq_move_file(group_id="1234567", file_name="图片1.jpg", folder_name="ceshi")  
+AI：✅ 文件 '图片1.jpg' 已移动到文件夹 'ceshi'  
 
-用户：下载那个文档
-AI：调用 qq_download_file(group_id="1234567", file_name="文档.pdf")
-AI：✅ 已开始下载: 文档.pdf
-    📋 任务ID: 1234567_文档.pdf_1734567890
-    ⏰ 下载完成后我会通知你~
+用户：下载那个文档  
+AI：调用 qq_download_file(group_id="1234567", file_name="文档.pdf")  
+AI：✅ 已开始下载: 文档.pdf  
+    📋 任务ID: 1234567_文档.pdf_1734567890  
+    ⏰ 下载完成后我会通知你~  
 
-用户：刚才下载的好了吗？
-AI：调用 qq_check_download(task_id="1234567_文档.pdf_1734567890")
-AI：✅ 下载完成！📄 文档.pdf
+用户：刚才下载的好了吗？  
+AI：调用 qq_check_download(task_id="1234567_文档.pdf_1734567890")  
+AI：✅ 下载完成！📄 文档.pdf  
 
 ### 日志输出
-普通模式（debug_mode: false）
-[QQFileManager] ✅ 初始化完成
-[QQFileManager] ✅ 成功创建文件夹: 测试文件夹
-[QQFileManager] ✅ 文件 'test.jpg' 已下载完成
-调试模式（debug_mode: true）
-[QQFileManager] 🔧 调试模式已开启，将显示详细日志
-[QQFileManager] 🔍 找到QQ适配器: qq
-[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 1234567)
-[QQFileManager] 🔍 创建文件夹成功: 测试文件夹, ID: xxxxx
-[QQFileManager] 🔍 已清除群 1234567 的缓存
-[QQFileManager] 🔍 开始搜索文件: test.jpg
-[QQFileManager] 🔍 共获取到 3 个文件
-[QQFileManager] 🔍 找到匹配文件: test.jpg
-[QQFileManager] 🔍 开始下载文件: test.jpg -> D:\...\data\files\test.jpg
-[QQFileManager] 🔍 文件下载完成: test.jpg
+普通模式（debug_mode: false）  
+[QQFileManager] ✅ 初始化完成  
+[QQFileManager] ✅ 成功创建文件夹: 测试文件夹  
+[QQFileManager] ✅ 文件 'test.jpg' 已下载完成  
+调试模式（debug_mode: true）  
+[QQFileManager] 🔧 调试模式已开启，将显示详细日志  
+[QQFileManager] 🔍 找到QQ适配器: qq  
+[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 1234567)  
+[QQFileManager] 🔍 创建文件夹成功: 测试文件夹, ID: xxxxx  
+[QQFileManager] 🔍 已清除群 1234567 的缓存  
+[QQFileManager] 🔍 开始搜索文件: test.jpg  
+[QQFileManager] 🔍 共获取到 3 个文件  
+[QQFileManager] 🔍 找到匹配文件: test.jpg  
+[QQFileManager] 🔍 开始下载文件: test.jpg -> D:\...\data\files\test.jpg  
+[QQFileManager] 🔍 文件下载完成: test.jpg  
 
 ### 注意事项
-Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
-删除文件夹前需确保文件夹为空
-下载链接有时效性，请尽快下载
-批量删除时，如部分文件删除失败会返回成功/失败统计
+Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作  
+删除文件夹前需确保文件夹为空  
+下载链接有时效性，请尽快下载  
+批量删除时，如部分文件删除失败会返回成功/失败统计  
 
 ### 更新日志
-v1.0.0
-*初始版本
-*支持文件列表、文件夹列表
-*支持创建/删除文件夹
-*支持删除文件
-*支持移动文件
-*支持异步下载文件
-*支持群组权限管理
-*支持调试模式
+v1.0.0  
+*初始版本  
+*支持文件列表、文件夹列表  
+*支持创建/删除文件夹  
+*支持删除文件  
+*支持移动文件  
+*支持异步下载文件  
+*支持群组权限管理  
+*支持调试模式  
