@@ -91,23 +91,23 @@ data/plugins/
 ###使用示例
 用户对话示例
 用户：帮我看看这个群有哪些文件
-AI：调用 qq_list_files(group_id="878686562")
+AI：调用 qq_list_files(group_id="1234567")
 AI：群里有 2 个文件和 1 个文件夹：
     📁 文件夹：ceshi
     📄 文件：图片1.jpg、文档.pdf
 
 用户：把图片1.jpg移动到 ceshi 文件夹
-AI：调用 qq_move_file(group_id="878686562", file_name="图片1.jpg", folder_name="ceshi")
+AI：调用 qq_move_file(group_id="1234567", file_name="图片1.jpg", folder_name="ceshi")
 AI：✅ 文件 '图片1.jpg' 已移动到文件夹 'ceshi'
 
 用户：下载那个文档
-AI：调用 qq_download_file(group_id="878686562", file_name="文档.pdf")
+AI：调用 qq_download_file(group_id="1234567", file_name="文档.pdf")
 AI：✅ 已开始下载: 文档.pdf
-    📋 任务ID: 878686562_文档.pdf_1734567890
+    📋 任务ID: 1234567_文档.pdf_1734567890
     ⏰ 下载完成后我会通知你~
 
 用户：刚才下载的好了吗？
-AI：调用 qq_check_download(task_id="878686562_文档.pdf_1734567890")
+AI：调用 qq_check_download(task_id="1234567_文档.pdf_1734567890")
 AI：✅ 下载完成！📄 文档.pdf
 
 日志输出
@@ -118,9 +118,9 @@ AI：✅ 下载完成！📄 文档.pdf
 调试模式（debug_mode: true）
 [QQFileManager] 🔧 调试模式已开启，将显示详细日志
 [QQFileManager] 🔍 找到QQ适配器: qq
-[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 878686562)
+[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 1234567)
 [QQFileManager] 🔍 创建文件夹成功: 测试文件夹, ID: xxxxx
-[QQFileManager] 🔍 已清除群 878686562 的缓存
+[QQFileManager] 🔍 已清除群 1234567 的缓存
 [QQFileManager] 🔍 开始搜索文件: test.jpg
 [QQFileManager] 🔍 共获取到 3 个文件
 [QQFileManager] 🔍 找到匹配文件: test.jpg
