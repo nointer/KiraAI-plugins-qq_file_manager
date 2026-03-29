@@ -87,12 +87,12 @@ data/plugins/
   "disabled_list_files": []
 }
 
-权限配置说明
+### 权限配置说明
 每个功能对应的 disabled_xxx 列表可以填入多个群号
 填入 "all" 表示所有群都禁用该功能
 列表为空时该功能对所有群启用
 
-工具列表
+###工具列表
 插件注册了以下工具供 LLM 调用：
 
 工具名 			 	 |	功能 					|		参数
@@ -105,7 +105,7 @@ qq_move_file	 	 |	移动文件					|	group_id, file_name, folder_name
 qq_download_file 	 |	下载文件					|	group_id, file_name
 qq_check_download	 |	检查下载任务状态			|	task_id
 
-使用示例
+###使用示例
 用户对话示例
 用户：帮我看看这个群有哪些文件
 AI：调用 qq_list_files(group_id="878686562")
@@ -144,13 +144,13 @@ AI：✅ 下载完成！📄 文档.pdf
 [QQFileManager] 🔍 开始下载文件: test.jpg -> D:\...\data\files\test.jpg
 [QQFileManager] 🔍 文件下载完成: test.jpg
 
-#注意事项
+###注意事项
 Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
 删除文件夹前需确保文件夹为空
 下载链接有时效性，请尽快下载
 批量删除时，如部分文件删除失败会返回成功/失败统计
 
-更新日志
+###更新日志
 v1.0.0
 *初始版本
 *支持文件列表、文件夹列表
@@ -160,22 +160,3 @@ v1.0.0
 *支持异步下载文件
 *支持群组权限管理
 *支持调试模式
-
-许可证
-MIT License
-'@
-Set-Content -Path "D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md" -Value $content -Encoding UTF8
-Write-Host "README.md 已创建成功！" -ForegroundColor Green
-### 方法三：使用 VS Code 或记事本
-1. 打开 VS Code 或记事本
-2. 将上面的 Markdown 内容复制进去
-3. 保存到 `D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md`
-4. 确保编码选择 UTF-8
-## 文件结构确认
-创建完成后，您的插件目录应该包含以下文件：
-D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager
-├── init.py
-├── main.py
-├── manifest.json
-├── schema.json
-└── README.md ← 新创建的文件
