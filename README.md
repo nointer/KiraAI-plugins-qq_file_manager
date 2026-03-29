@@ -87,7 +87,8 @@ data/plugins/
   "disabled_list_files": []
 }
 
-###使用示例
+
+**###使用示例**
 用户对话示例
 用户：帮我看看这个群有哪些文件
 AI：调用 qq_list_files(group_id="878686562")
