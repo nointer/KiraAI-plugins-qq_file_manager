@@ -87,24 +87,6 @@ data/plugins/
   "disabled_list_files": []
 }
 
-### 权限配置说明
-每个功能对应的 disabled_xxx 列表可以填入多个群号
-填入 "all" 表示所有群都禁用该功能
-列表为空时该功能对所有群启用
-
-###工具列表
-插件注册了以下工具供 LLM 调用：
-
-工具名 			 	 |	功能 					|		参数
-qq_list_files		 	 |	获取群根目录文件和文件夹	|	group_id
-qq_list_folder_files	 |	查看指定文件夹内文件		|	group_id, folder_id/folder_name
-qq_create_folder	  	 |	创建文件夹				|	group_id, folder_name
-qq_delete_folder	 	 |	删除文件夹				|	group_id, folder_name/folder_id
-qq_delete_file	  	 |	删除文件					|	group_id, file_names/file_ids
-qq_move_file	 	 |	移动文件					|	group_id, file_name, folder_name
-qq_download_file 	 |	下载文件					|	group_id, file_name
-qq_check_download	 |	检查下载任务状态			|	task_id
-
 ###使用示例
 用户对话示例
 用户：帮我看看这个群有哪些文件
