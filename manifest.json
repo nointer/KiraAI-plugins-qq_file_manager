@@ -1,0 +1,8 @@
+{
+  "display_name": "QQ File Manager",
+  "plugin_id": "qq_file_manager",
+  "version": "1.0.0",
+  "author": "KiraAI User",
+  "description": "QQ群文件管理插件，支持获取文件列表、下载文件、移动文件、创建/删除文件夹、批量删除文件，支持群组权限管理",
+  "repo": null
+}

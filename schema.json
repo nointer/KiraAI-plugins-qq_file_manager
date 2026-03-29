@@ -1,0 +1,62 @@
+{
+  "download_path": {
+    "type": "string",
+    "default": "files",
+    "hint": "文件下载保存路径（相对于 data/ 目录）"
+  },
+  "max_file_size_mb": {
+    "type": "integer",
+    "default": 100,
+    "hint": "允许下载的最大文件大小（MB）"
+  },
+  "allowed_extensions": {
+    "type": "list",
+    "default": [],
+    "hint": "允许下载的文件扩展名列表，每行一个，为空则允许所有类型"
+  },
+  "max_files_list": {
+    "type": "integer",
+    "default": 20,
+    "hint": "列出文件时的最大数量"
+  },
+  "download_timeout": {
+    "type": "integer",
+    "default": 60,
+    "hint": "下载超时时间（秒）"
+  },
+  "debug_mode": {
+    "type": "switch",
+    "default": false,
+    "hint": "调试模式：开启后显示详细日志，便于排查问题"
+  },
+  "disabled_create_folder": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用创建文件夹功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  },
+  "disabled_delete_folder": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用删除文件夹功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  },
+  "disabled_delete_file": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用删除文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  },
+  "disabled_move_file": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用移动文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  },
+  "disabled_download_file": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用下载文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  },
+  "disabled_list_files": {
+    "type": "list",
+    "default": [],
+    "hint": "禁用查看文件列表功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  }
+}
