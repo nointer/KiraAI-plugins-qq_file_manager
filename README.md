@@ -47,7 +47,7 @@ data/plugins/
 　　　　├── main.py  
 　　　　├── manifest.json  
 　　　　├── schema.json  
-　　　　└── README.md  
+　　　　├── README.md  
 　　　　└── requirements.txt   
 
 ## 配置
