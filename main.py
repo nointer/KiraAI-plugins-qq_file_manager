@@ -3,6 +3,7 @@ QQ群文件管理插件 - 完整版
 支持：文件列表、文件夹列表、查看文件夹内容、创建文件夹、删除文件夹、删除文件、移动文件、下载文件
 权限管理：按功能维度配置禁用群组，支持 all 全局禁用
 调试模式：布尔开关，开启时显示详细日志
+兼容性：自动适配 napcat 和 llonebot 的移动文件 API（自适应探测）
 """
 
 import os
@@ -30,6 +31,9 @@ class QQFileManager(BasePlugin):
         self.pending_downloads = {}
         self._folder_cache = {}
         self.debug_mode = False
+        # API 提供者: "auto" (自动探测), "napcat", "llonebot"
+        self.api_provider = self.plugin_cfg.get("api_provider", "auto")
+        self._api_provider_detected = False  # 是否已探测成功
 
     async def initialize(self):
         """插件初始化"""
@@ -64,6 +68,11 @@ class QQFileManager(BasePlugin):
         self.allowed_extensions = self.plugin_cfg.get("allowed_extensions", [])
         self.max_files_list = self.plugin_cfg.get("max_files_list", 20)
         self.download_timeout = self.plugin_cfg.get("download_timeout", 60)
+
+        if self.api_provider != "auto":
+            self._log_info(f"使用手动配置的 API 提供者: {self.api_provider}")
+        else:
+            self._log_info("API 提供者设为自动探测，首次移动文件时将自动识别 napcat 或 llonebot")
 
         self._log_info("✅ 初始化完成")
 
@@ -318,19 +327,24 @@ class QQFileManager(BasePlugin):
     # ========== API 方法 ==========
 
     async def _create_folder_api(self, group_id: str, folder_name: str) -> Optional[str]:
-        """创建群文件夹"""
+        """创建群文件夹（兼容 NapCat 和 LLOneBot）"""
         if not self.qq_adapter:
             return None
         try:
             bot = self.qq_adapter.get_client()
+            # 同时传递 folder_name 和 name，确保两种实现都能识别
             result = await bot.send_action(
                 "create_group_file_folder",
-                {"group_id": group_id, "folder_name": folder_name}
+                {
+                    "group_id": group_id,
+                    "folder_name": folder_name,  # 供 NapCat / 标准 OneBot 使用
+                    "name": folder_name          # 供 LLOneBot 使用（实际要求 name）
+                }
             )
-            
+
             if not result:
                 return None
-                
+
             if isinstance(result, dict):
                 if result.get("status") == "ok":
                     data = result.get("data", {})
@@ -400,43 +414,91 @@ class QQFileManager(BasePlugin):
             self._log_error(f"删除文件异常: {e}")
             return False
 
+
     async def _move_file_to_folder(self, group_id: str, file_uuid: str, current_folder_id: str, target_folder_id: str, file_name: str = "") -> tuple[bool, str]:
-        """移动文件到指定文件夹"""
+        """移动文件到指定文件夹（支持内存记录 + 自动回退）"""
         if not self.qq_adapter:
             return False, "QQ适配器未就绪"
 
         clean_current = "/" if not current_folder_id or current_folder_id == "/" else current_folder_id.lstrip('/')
         clean_target = "/" if not target_folder_id or target_folder_id == "/" else target_folder_id.lstrip('/')
 
-        self._log_debug(f"移动文件: {file_name}, 当前目录: {clean_current}, 目标目录: {clean_target}")
-
-        try:
-            bot = self.qq_adapter.get_client()
-            result = await bot.send_action(
-                "move_group_file",
-                {
+        # 定义两种格式的参数构造器
+        def build_params(provider: str):
+            if provider == "llonebot":
+                return {
+                    "group_id": int(group_id),
+                    "file_id": file_uuid,
+                    "parent_directory": clean_current,
+                    "target_directory": clean_target
+                }
+            else:  # napcat
+                return {
                     "group_id": int(group_id),
                     "file_id": file_uuid,
                     "current_parent_directory": clean_current,
                     "target_parent_directory": clean_target
                 }
-            )
 
-            if not result:
-                return False, "API返回为空"
+        async def try_move(provider: str) -> tuple[bool, str]:
+            self._log_debug(f"尝试 {provider} 格式移动文件: {file_name}")
+            try:
+                bot = self.qq_adapter.get_client()
+                result = await bot.send_action("move_group_file", build_params(provider))
+                if not result:
+                    return False, "API返回为空"
+                if isinstance(result, dict):
+                    if result.get("status") == "ok":
+                        return True, ""
+                    elif result.get("status") == "failed":
+                        msg = result.get("message", "")
+                        return False, msg
+                return False, "未知响应格式"
+            except Exception as e:
+                return False, str(e)
 
-            if isinstance(result, dict):
-                if result.get("status") == "ok":
-                    self._log_debug(f"移动文件成功: {file_name}")
-                    return True, ""
-                elif result.get("status") == "failed":
-                    msg = result.get("message", "")
-                    self._log_error(f"移动文件失败: {msg}")
-                    return False, f"移动失败: {msg[:100]}"
-            return False, "未知响应格式"
-        except Exception as e:
-            self._log_error(f"移动文件异常: {e}")
-            return False, str(e)
+        # 确定尝试顺序
+        if self.api_provider == "auto":
+            # 未探测过，按顺序尝试 napcat -> llonebot
+            providers = ["napcat", "llonebot"]
+        else:
+            # 已记录 provider，先尝试记录的，如果失败且错误特征符合则回退另一种
+            providers = [self.api_provider]
+            # 回退时的另一种
+            fallback = "llonebot" if self.api_provider == "napcat" else "napcat"
+
+        # 第一次尝试
+        success, msg = await try_move(providers[0])
+        if success:
+            # 成功，如果之前是 auto 则记录
+            if self.api_provider == "auto":
+                self.api_provider = providers[0]
+                self._log_info(f"自适应检测到 API 提供者: {self.api_provider}")
+            return True, ""
+
+        # 第一次失败，检查是否需要回退
+        need_fallback = False
+        if self.api_provider != "auto":
+            # 已记录的 provider 失败，检查错误特征是否是格式不匹配
+            if "parent_directory missing required value" in msg or "target_directory" in msg.lower():
+                need_fallback = True
+                self._log_debug(f"当前 provider ({self.api_provider}) 格式失败，尝试回退到另一种格式")
+        else:
+            # 自动模式第一次失败，尝试第二种
+            need_fallback = True
+
+        if need_fallback:
+            fallback_provider = providers[1] if len(providers) > 1 else fallback
+            success2, msg2 = await try_move(fallback_provider)
+            if success2:
+                # 回退成功，更新内存中的 provider
+                self.api_provider = fallback_provider
+                self._log_info(f"自适应切换 API 提供者: {fallback_provider}")
+                return True, ""
+            else:
+                return False, msg2
+
+        return False, msg
 
     async def _send_notification(self, session_id: str, file_name: str):
         """发送下载完成通知"""
@@ -792,7 +854,6 @@ class QQFileManager(BasePlugin):
                 "group_id": {"type": "string", "description": "QQ群号"},
                 "file_name": {"type": "string", "description": "要移动的文件名"},
                 "folder_name": {"type": "string", "description": "目标文件夹名称，移动到根目录请传入'根目录'或'/'"}
-
             },
             "required": ["group_id", "file_name", "folder_name"]
         }

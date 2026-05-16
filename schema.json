@@ -29,6 +29,16 @@
     "default": false,
     "hint": "调试模式：开启后显示详细日志，便于排查问题"
   },
+  "api_provider": {
+    "type": "select",
+    "default": "auto",
+    "options": [
+      { "label": "自动探测（推荐）", "value": "auto" },
+      { "label": "NapCat", "value": "napcat" },
+      { "label": "LLOneBot", "value": "llonebot" }
+    ],
+    "hint": "API 提供者：选择 napcat 或 llonebot，自动探测适用于大多数情况，若自动识别失败可手动指定"
+  },
   "disabled_create_folder": {
     "type": "list",
     "default": [],
