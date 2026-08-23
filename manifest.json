@@ -5,6 +5,6 @@
   "author": "nointer",
   "icon": "icon.svg",
   "description": "QQ群文件管理插件，支持获取文件列表、下载文件、移动文件、创建/删除文件夹、批量删除文件，支持群组权限管理，兼容 napcat 和 llonebot",
-  "repo": "https://github.com/nointer/KiraAI-plugins-qq_file_manager/tree/main",
+  "repo": "https://github.com/nointer/KiraAI-plugins-qq_file_manager/",
   "config_schema": "schema.json"
 }
