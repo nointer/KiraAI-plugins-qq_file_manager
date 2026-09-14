@@ -1,72 +1,140 @@
 {
-  "download_path": {
-    "type": "string",
-    "default": "files",
-    "hint": "文件下载保存路径（相对于 data/ 目录）"
+  "plugin_info": {
+    "type": "info",
+    "name": "使用说明",
+    "level": "info",
+    "hint": "QQ群文件管理插件：支持文件列表、关键词搜索、重命名、创建/删除文件夹、删除/移动/下载文件。下载限制（大小/扩展名）在下载前预检 + 下载中二次校验。权限支持黑名单（默认）/白名单两种模式，详见「权限设置」分组。"
   },
-  "max_file_size_mb": {
-    "type": "integer",
-    "default": 100,
-    "hint": "允许下载的最大文件大小（MB）"
+  "section_basic": {
+    "type": "section",
+    "name": "基础设置",
+    "collapsed": false,
+    "fields": {
+      "max_files_list": {
+        "type": "integer",
+        "name": "最大显示条数",
+        "default": 20,
+        "hint": "列出/搜索文件时最多显示的条目数量，超出部分会提示缩小范围"
+      },
+      "debug_mode": {
+        "type": "switch",
+        "name": "调试模式",
+        "default": false,
+        "hint": "开启后日志将显示 API 调用、搜索、缓存等详细过程，便于排查问题，日常使用建议关闭"
+      },
+      "api_provider": {
+        "type": "select",
+        "name": "协议端",
+        "default": "auto",
+        "options": [
+          { "label": "自动探测（推荐）", "value": "auto" },
+          { "label": "NapCat", "value": "napcat" },
+          { "label": "LLOneBot", "value": "llonebot" }
+        ],
+        "hint": "选择后端适配器；自动探测适用于大多数情况，若移动/重命名接口识别失败可手动指定"
+      }
+    }
   },
-  "allowed_extensions": {
-    "type": "list",
-    "default": [],
-    "hint": "允许下载的文件扩展名列表，每行一个，为空则允许所有类型"
+  "section_download": {
+    "type": "section",
+    "name": "下载设置",
+    "collapsed": false,
+    "fields": {
+      "download_path": {
+        "type": "string",
+        "name": "下载保存路径",
+        "default": "files",
+        "hint": "文件下载保存路径，相对于 data/ 目录（如 files 或 downloads/group_files），仅支持相对路径，不支持 ../ 或绝对路径"
+      },
+      "max_file_size_mb": {
+        "type": "integer",
+        "name": "最大文件大小（MB）",
+        "default": 100,
+        "hint": "允许下载的最大文件大小（MB），超过将拒绝下载；填 0 表示不限制"
+      },
+      "allowed_extensions": {
+        "type": "list",
+        "name": "允许的扩展名",
+        "default": [],
+        "hint": "允许下载的文件扩展名白名单，每行一个（如 pdf、jpg、zip，可不带点，不区分大小写）；留空 = 允许所有类型"
+      },
+      "download_timeout": {
+        "type": "integer",
+        "name": "下载超时（秒）",
+        "default": 60,
+        "hint": "下载超时时间（秒），超时后任务标记失败"
+      }
+    }
   },
-  "max_files_list": {
-    "type": "integer",
-    "default": 20,
-    "hint": "列出文件时的最大数量"
-  },
-  "download_timeout": {
-    "type": "integer",
-    "default": 60,
-    "hint": "下载超时时间（秒）"
-  },
-  "debug_mode": {
-    "type": "switch",
-    "default": false,
-    "hint": "调试模式：开启后显示详细日志，便于排查问题"
-  },
-  "api_provider": {
-    "type": "select",
-    "default": "auto",
-    "options": [
-      { "label": "自动探测（推荐）", "value": "auto" },
-      { "label": "NapCat", "value": "napcat" },
-      { "label": "LLOneBot", "value": "llonebot" }
-    ],
-    "hint": "API 提供者：选择 napcat 或 llonebot，自动探测适用于大多数情况，若自动识别失败可手动指定"
-  },
-  "disabled_create_folder": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用创建文件夹功能的群号列表，每行一个，填写 'all' 表示全部禁用"
-  },
-  "disabled_delete_folder": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用删除文件夹功能的群号列表，每行一个，填写 'all' 表示全部禁用"
-  },
-  "disabled_delete_file": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用删除文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
-  },
-  "disabled_move_file": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用移动文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
-  },
-  "disabled_download_file": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用下载文件功能的群号列表，每行一个，填写 'all' 表示全部禁用"
-  },
-  "disabled_list_files": {
-    "type": "list",
-    "default": [],
-    "hint": "禁用查看文件列表功能的群号列表，每行一个，填写 'all' 表示全部禁用"
+  "section_permission": {
+    "type": "section",
+    "name": "权限设置",
+    "collapsed": true,
+    "fields": {
+      "permission_mode": {
+        "type": "select",
+        "name": "权限模式",
+        "default": "deny_list",
+        "options": [
+          { "label": "黑名单模式（默认：全部群可用，按需禁用）", "value": "deny_list" },
+          { "label": "白名单模式（默认全部禁止，仅名单内群可用）", "value": "allow_list" }
+        ],
+        "hint": "黑名单模式deny_list：所有群默认可用，通过下方各功能的禁用列表按需限制；白名单模式allow_list：仅「允许的群号」名单内的群可使用本插件全部功能（留空名单 = 所有群均禁用）"
+      },
+      "enabled_groups": {
+        "type": "list",
+        "name": "允许的群号（白名单）",
+        "default": [],
+        "hint": "白名单模式下允许使用本插件全部功能的QQ群号，每行一个；黑名单模式下不生效。注意：白名单模式下留空 = 所有群均禁用"
+      },
+      "disabled_list_files": {
+        "type": "list",
+        "name": "禁用「查看/搜索文件」的群",
+        "default": [],
+        "hint": "禁用「查看文件列表/搜索」的群号，每行一个群号（如 878686562）；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_download_file": {
+        "type": "list",
+        "name": "禁用「下载文件」的群",
+        "default": [],
+        "hint": "禁用「下载文件」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_create_folder": {
+        "type": "list",
+        "name": "禁用「创建文件夹」的群",
+        "default": [],
+        "hint": "禁用「创建文件夹」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_delete_folder": {
+        "type": "list",
+        "name": "禁用「删除文件夹」的群",
+        "default": [],
+        "hint": "禁用「删除文件夹」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_delete_file": {
+        "type": "list",
+        "name": "禁用「删除文件」的群",
+        "default": [],
+        "hint": "禁用「删除文件」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_move_file": {
+        "type": "list",
+        "name": "禁用「移动文件」的群",
+        "default": [],
+        "hint": "禁用「移动文件」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_rename_file": {
+        "type": "list",
+        "name": "禁用「重命名文件」的群",
+        "default": [],
+        "hint": "禁用「重命名文件」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      },
+      "disabled_rename_folder": {
+        "type": "list",
+        "name": "禁用「重命名文件夹」的群",
+        "default": [],
+        "hint": "禁用「重命名文件夹」的群号，每行一个群号；填 all 表示对所有群禁用；留空表示不限制"
+      }
+    }
   }
 }
