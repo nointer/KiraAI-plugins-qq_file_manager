@@ -100,7 +100,7 @@ data/plugins/
   },
   "section_permission": {
     "permission_mode": "allow_list",
-    "enabled_groups": ["878686562", "123456789"],
+    "enabled_groups": ["874381335", "123456789"],
     "disabled_delete_folder": [],
     "disabled_delete_file": ["123456789"]
   }
@@ -116,51 +116,64 @@ data/plugins/
 工具列表
 插件注册了以下工具供 LLM 调用：
 
-工具名 			 	 |	功能 					|		参数
-qq_list_files		 	 |	获取群根目录文件和文件夹	|	group_id
-qq_list_folder_files	 |	查看指定文件夹内文件		|	group_id, folder_id/folder_name
-qq_search_files	 	 |	按关键词搜索群文件			|	group_id, keyword, folder_id/folder_name（可选）
-qq_rename_file	 	 |	重命名群文件				|	group_id, new_name, file_id/file_name
-qq_rename_folder	 |	重命名群文件夹				|	group_id, new_folder_name, folder_id/folder_name
-qq_create_folder	  	 |	创建文件夹				|	group_id, folder_name
-qq_delete_folder	 	 |	删除文件夹				|	group_id, folder_name/folder_id
-qq_delete_file	  	 |	删除文件					|	group_id, file_names/file_ids
-qq_move_file	 	 |	移动文件					|	group_id, file_name, folder_name
-qq_download_file 	 |	下载文件					|	group_id, file_name
-qq_check_download	 |	检查下载任务状态			|	task_id
+## 工具列表
 
-#注意事项
-Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
-删除文件夹前需确保文件夹为空
-下载链接有时效性，请尽快下载
-批量删除时，如部分文件删除失败会返回成功/失败统计
+| 工具名 | 功能 | 参数 |
+| --- | --- | --- |
+| `qq_list_files` | 获取群根目录文件和文件夹 | `group_id` |
+| `qq_list_folder_files` | 查看指定文件夹内文件 | `group_id`, `folder_id/folder_name` |
+| `qq_search_files` | 按关键词搜索群文件 | `group_id`, `keyword`, `folder_id/folder_name`（可选） |
+| `qq_rename_file` | 重命名群文件 | `group_id`, `new_name`, `file_id/file_name` |
+| `qq_rename_folder` | 重命名群文件夹 | `group_id`, `new_folder_name`, `folder_id/folder_name` |
+| `qq_create_folder` | 创建文件夹 | `group_id`, `folder_name` |
+| `qq_delete_folder` | 删除文件夹 | `group_id`, `folder_name/folder_id` |
+| `qq_delete_file` | 删除文件 | `group_id`, `file_names/file_ids` |
+| `qq_move_file` | 移动文件 | `group_id`, `file_name`, `folder_name` |
+| `qq_download_file` | 下载文件 | `group_id`, `file_name` |
+| `qq_check_download` | 检查下载任务状态 | `task_id` |
 
-更新日志
-v1.4.0
-*新增全局白名单权限模式：permission_mode 下拉切换黑名单（默认）/白名单，白名单模式下仅 enabled_groups 名单内的群可用（与 Kira 官方 QQ 适配器同款设计）
-*配置界面重构为折叠分组（基础设置/下载设置/权限设置），权限组默认收起，各配置项补充中文显示名
-*配置存储兼容：折叠分组（section 嵌套）与旧版扁平配置双向兼容，旧配置无需迁移
-v1.3.0
-*新增 qq_rename_file / qq_rename_folder 重命名群文件与文件夹工具（自适应探测协议端支持情况，NapCat 支持文件重命名、LLOneBot 支持文件夹重命名）
-*修复删除文件连坐问题：按 file_names 删除时若存在多个同名文件，拒绝执行并列出所有位置及 file_id，避免误删；file_ids 去重防止重复删除
-*修复限定搜索空文件夹时误报错误的问题，现返回正常的空结果
-*新增重命名功能的群权限开关（disabled_rename_file / disabled_rename_folder）
-*修复 allowed_extensions / max_file_size_mb 配置不生效的问题：现于下载前预检 + 下载中按实际响应大小二次校验
-*download_path 增加路径安全校验（仅相对路径），数值型配置增加类型容错，权限列表兼容数字类型群号
-*配置界面优化：按「列表/调试/协议端/下载/权限」分组排序，提示语补充示例与取值说明
-v1.2.0
-*新增 qq_search_files 关键词搜索群文件工具
-*支持搜索根目录及全部文件夹，可通过 folder_id/folder_name 限定范围
-*搜索结果包含文件位置、大小、上传者、日期和 file_id，可直接配合删除/移动工具
-*搜索复用查看列表（disabled_list_files）的权限开关
-v1.0.0
-*初始版本
-*支持文件列表、文件夹列表
-*支持创建/删除文件夹
-*支持删除文件
-*支持移动文件
-*支持异步下载文件
-*支持群组权限管理
-*支持调试模式
+## 注意事项
+
+- Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
+- 删除文件夹前需确保文件夹为空
+- 下载链接有时效性，请尽快下载
+- 批量删除时，如部分文件删除失败会返回成功/失败统计
+- napcat仅提供重命名文件接口，llonebot仅提供重命名文件夹接口，只能实现一半
+
+## 更新日志
+
+### v1.4.0
+
+- 新增全局白名单权限模式：`permission_mode` 下拉切换黑名单（默认）/白名单，白名单模式下仅 `enabled_groups` 名单内的群可用（与 Kira 官方 QQ 适配器同款设计）
+- 配置界面重构为折叠分组（基础设置/下载设置/权限设置），权限组默认收起，各配置项补充中文显示名
+- 配置存储兼容：折叠分组（section 嵌套）与旧版扁平配置双向兼容，旧配置无需迁移
+
+### v1.3.0
+
+- 新增 `qq_rename_file` / `qq_rename_folder` 重命名群文件与文件夹工具（自适应探测协议端支持情况，NapCat 支持文件重命名、LLOneBot 支持文件夹重命名）
+- 修复删除文件连坐问题：按 `file_names` 删除时若存在多个同名文件，拒绝执行并列出所有位置及 `file_id`，避免误删；`file_ids` 去重防止重复删除
+- 修复限定搜索空文件夹时误报错误的问题，现返回正常的空结果
+- 新增重命名功能的群权限开关（`disabled_rename_file` / `disabled_rename_folder`）
+- 修复 `allowed_extensions` / `max_file_size_mb` 配置不生效的问题：现于下载前预检 + 下载中按实际响应大小二次校验
+- `download_path` 增加路径安全校验（仅相对路径），数值型配置增加类型容错，权限列表兼容数字类型群号
+- 配置界面优化：按「列表/调试/协议端/下载/权限」分组排序，提示语补充示例与取值说明
+
+### v1.2.0
+
+- 新增 `qq_search_files` 关键词搜索群文件工具
+- 支持搜索根目录及全部文件夹，可通过 `folder_id/folder_name` 限定范围
+- 搜索结果包含文件位置、大小、上传者、日期和 `file_id`，可直接配合删除/移动工具
+- 搜索复用查看列表（`disabled_list_files`）的权限开关
+
+### v1.0.0
+
+- 初始版本
+- 支持文件列表、文件夹列表
+- 支持创建/删除文件夹
+- 支持删除文件
+- 支持移动文件
+- 支持异步下载文件
+- 支持群组权限管理
+- 支持调试模式
 
 
