@@ -129,67 +129,6 @@ qq_move_file	 	 |	移动文件					|	group_id, file_name, folder_name
 qq_download_file 	 |	下载文件					|	group_id, file_name
 qq_check_download	 |	检查下载任务状态			|	task_id
 
-使用示例
-用户对话示例
-用户：帮我看看这个群有哪些文件
-AI：调用 qq_list_files(group_id="878686562")
-AI：群里有 2 个文件和 1 个文件夹：
-    📁 文件夹：ceshi
-    📄 文件：图片1.jpg、文档.pdf
-
-用户：帮我找找群里所有带"报表"的文件
-AI：调用 qq_search_files(group_id="878686562", keyword="报表")
-AI：🔍 搜索「报表」共找到 2 个文件（根目录及全部文件夹）：
-    1. 2024销售报表.xlsx
-       📁 根目录 | 💾 128.5KB | 👤 张三 | 📅 2024-06-01
-       🆔 /06a5e6f4-xxxx
-    2. 月度报表模板.docx
-       📁 资料 | 💾 46.2KB | 👤 李四 | 📅 2024-05-20
-       🆔 /1b9c2d77-xxxx
-
-用户：把群文件里的 XX 删掉
-AI：调用 qq_search_files(group_id="878686562", keyword="XX")，拿到 file_id 后调用 qq_delete_file(group_id="878686562", file_ids=["/xxxx"])
-AI：✅ 成功删除文件: XX说明.txt
-
-用户：把"旧名字.pdf"改成"新名字.pdf"
-AI：调用 qq_rename_file(group_id="878686562", file_name="旧名字.pdf", new_name="新名字.pdf")
-AI：✅ 已将文件 旧名字.pdf（位于 根目录）重命名为 新名字.pdf
-
-用户：把"资料"文件夹改名为"归档"
-AI：调用 qq_rename_folder(group_id="878686562", folder_name="资料", new_folder_name="归档")
-AI：✅ 已将文件夹 资料 重命名为 归档
-
-用户：把图片1.jpg移动到 ceshi 文件夹
-AI：调用 qq_move_file(group_id="878686562", file_name="图片1.jpg", folder_name="ceshi")
-AI：✅ 文件 '图片1.jpg' 已移动到文件夹 'ceshi'
-
-用户：下载那个文档
-AI：调用 qq_download_file(group_id="878686562", file_name="文档.pdf")
-AI：✅ 已开始下载: 文档.pdf
-    📋 任务ID: 878686562_文档.pdf_1734567890
-    ⏰ 下载完成后我会通知你~
-
-用户：刚才下载的好了吗？
-AI：调用 qq_check_download(task_id="878686562_文档.pdf_1734567890")
-AI：✅ 下载完成！📄 文档.pdf
-
-日志输出
-普通模式（debug_mode: false）
-[QQFileManager] ✅ 初始化完成
-[QQFileManager] ✅ 成功创建文件夹: 测试文件夹
-[QQFileManager] ✅ 文件 'test.jpg' 已下载完成
-调试模式（debug_mode: true）
-[QQFileManager] 🔧 调试模式已开启，将显示详细日志
-[QQFileManager] 🔍 找到QQ适配器: qq
-[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 878686562)
-[QQFileManager] 🔍 创建文件夹成功: 测试文件夹, ID: xxxxx
-[QQFileManager] 🔍 已清除群 878686562 的缓存
-[QQFileManager] 🔍 开始搜索文件: test.jpg
-[QQFileManager] 🔍 共获取到 3 个文件
-[QQFileManager] 🔍 找到匹配文件: test.jpg
-[QQFileManager] 🔍 开始下载文件: test.jpg -> D:\...\data\files\test.jpg
-[QQFileManager] 🔍 文件下载完成: test.jpg
-
 #注意事项
 Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
 删除文件夹前需确保文件夹为空
