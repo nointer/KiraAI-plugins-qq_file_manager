@@ -163,21 +163,4 @@ v1.0.0
 *支持群组权限管理
 *支持调试模式
 
-许可证
-MIT License
-'@
-Set-Content -Path "D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md" -Value $content -Encoding UTF8
-Write-Host "README.md 已创建成功！" -ForegroundColor Green
-### 方法三：使用 VS Code 或记事本
-1. 打开 VS Code 或记事本
-2. 将上面的 Markdown 内容复制进去
-3. 保存到 `D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md`
-4. 确保编码选择 UTF-8
-## 文件结构确认
-创建完成后，您的插件目录应该包含以下文件：
-D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager
-├── init.py
-├── main.py
-├── manifest.json
-├── schema.json
-└── README.md ← 新创建的文件
+
