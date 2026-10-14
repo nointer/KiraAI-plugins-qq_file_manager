@@ -100,7 +100,7 @@ data/plugins/
   },
   "section_permission": {
     "permission_mode": "allow_list",
-    "enabled_groups": ["878686562", "123456789"],
+    "enabled_groups": ["874381335", "123456789"],
     "disabled_delete_folder": [],
     "disabled_delete_file": ["123456789"]
   }
@@ -116,86 +116,67 @@ data/plugins/
 工具列表
 插件注册了以下工具供 LLM 调用：
 
-工具名 			 	 |	功能 					|		参数
-qq_list_files		 	 |	获取群根目录文件和文件夹	|	group_id
-qq_list_folder_files	 |	查看指定文件夹内文件		|	group_id, folder_id/folder_name
-qq_search_files	 	 |	按关键词搜索群文件			|	group_id, keyword, folder_id/folder_name（可选）
-qq_rename_file	 	 |	重命名群文件				|	group_id, new_name, file_id/file_name
-qq_rename_folder	 |	重命名群文件夹				|	group_id, new_folder_name, folder_id/folder_name
-qq_create_folder	  	 |	创建文件夹				|	group_id, folder_name
-qq_delete_folder	 	 |	删除文件夹				|	group_id, folder_name/folder_id
-qq_delete_file	  	 |	删除文件					|	group_id, file_names/file_ids
-qq_move_file	 	 |	移动文件					|	group_id, file_name, folder_name
-qq_download_file 	 |	下载文件					|	group_id, file_name
-qq_check_download	 |	检查下载任务状态			|	task_id
+## 工具列表
 
-使用示例
-用户对话示例
-用户：帮我看看这个群有哪些文件
-AI：调用 qq_list_files(group_id="878686562")
-AI：群里有 2 个文件和 1 个文件夹：
-    📁 文件夹：ceshi
-    📄 文件：图片1.jpg、文档.pdf
+| 工具名 | 功能 | 参数 |
+| --- | --- | --- |
+| `qq_list_files` | 获取群根目录文件和文件夹 | `group_id` |
+| `qq_list_folder_files` | 查看指定文件夹内文件 | `group_id`, `folder_id/folder_name` |
+| `qq_search_files` | 按关键词搜索群文件 | `group_id`, `keyword`, `folder_id/folder_name`（可选） |
+| `qq_rename_file` | 重命名群文件 | `group_id`, `new_name`, `file_id/file_name` |
+| `qq_rename_folder` | 重命名群文件夹 | `group_id`, `new_folder_name`, `folder_id/folder_name` |
+| `qq_create_folder` | 创建文件夹 | `group_id`, `folder_name` |
+| `qq_delete_folder` | 删除文件夹 | `group_id`, `folder_name/folder_id` |
+| `qq_delete_file` | 删除文件 | `group_id`, `file_names/file_ids` |
+| `qq_move_file` | 移动文件 | `group_id`, `file_name`, `folder_name` |
+| `qq_download_file` | 下载文件 | `group_id`, `file_name` |
+| `qq_check_download` | 检查下载任务状态 | `task_id` |
 
-用户：帮我找找群里所有带"报表"的文件
-AI：调用 qq_search_files(group_id="878686562", keyword="报表")
-AI：🔍 搜索「报表」共找到 2 个文件（根目录及全部文件夹）：
-    1. 2024销售报表.xlsx
-       📁 根目录 | 💾 128.5KB | 👤 张三 | 📅 2024-06-01
-       🆔 /06a5e6f4-xxxx
-    2. 月度报表模板.docx
-       📁 资料 | 💾 46.2KB | 👤 李四 | 📅 2024-05-20
-       🆔 /1b9c2d77-xxxx
+## 注意事项
 
-用户：把群文件里的 XX 删掉
-AI：调用 qq_search_files(group_id="878686562", keyword="XX")，拿到 file_id 后调用 qq_delete_file(group_id="878686562", file_ids=["/xxxx"])
-AI：✅ 成功删除文件: XX说明.txt
+- Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
+- 删除文件夹前需确保文件夹为空
+- 下载链接有时效性，请尽快下载
+- 批量删除时，如部分文件删除失败会返回成功/失败统计
+- napcat仅提供重命名文件接口，llonebot仅提供重命名文件夹接口，只能实现一半
 
-用户：把"旧名字.pdf"改成"新名字.pdf"
-AI：调用 qq_rename_file(group_id="878686562", file_name="旧名字.pdf", new_name="新名字.pdf")
-AI：✅ 已将文件 旧名字.pdf（位于 根目录）重命名为 新名字.pdf
+## 更新日志
 
-用户：把"资料"文件夹改名为"归档"
-AI：调用 qq_rename_folder(group_id="878686562", folder_name="资料", new_folder_name="归档")
-AI：✅ 已将文件夹 资料 重命名为 归档
+### v1.4.0
 
-用户：把图片1.jpg移动到 ceshi 文件夹
-AI：调用 qq_move_file(group_id="878686562", file_name="图片1.jpg", folder_name="ceshi")
-AI：✅ 文件 '图片1.jpg' 已移动到文件夹 'ceshi'
+- 新增全局白名单权限模式：`permission_mode` 下拉切换黑名单（默认）/白名单，白名单模式下仅 `enabled_groups` 名单内的群可用（与 Kira 官方 QQ 适配器同款设计）
+- 配置界面重构为折叠分组（基础设置/下载设置/权限设置），权限组默认收起，各配置项补充中文显示名
+- 配置存储兼容：折叠分组（section 嵌套）与旧版扁平配置双向兼容，旧配置无需迁移
 
-用户：下载那个文档
-AI：调用 qq_download_file(group_id="878686562", file_name="文档.pdf")
-AI：✅ 已开始下载: 文档.pdf
-    📋 任务ID: 878686562_文档.pdf_1734567890
-    ⏰ 下载完成后我会通知你~
+### v1.3.0
 
-用户：刚才下载的好了吗？
-AI：调用 qq_check_download(task_id="878686562_文档.pdf_1734567890")
-AI：✅ 下载完成！📄 文档.pdf
+- 新增 `qq_rename_file` / `qq_rename_folder` 重命名群文件与文件夹工具（自适应探测协议端支持情况，NapCat 支持文件重命名、LLOneBot 支持文件夹重命名）
+- 修复删除文件连坐问题：按 `file_names` 删除时若存在多个同名文件，拒绝执行并列出所有位置及 `file_id`，避免误删；`file_ids` 去重防止重复删除
+- 修复限定搜索空文件夹时误报错误的问题，现返回正常的空结果
+- 新增重命名功能的群权限开关（`disabled_rename_file` / `disabled_rename_folder`）
+- 修复 `allowed_extensions` / `max_file_size_mb` 配置不生效的问题：现于下载前预检 + 下载中按实际响应大小二次校验
+- `download_path` 增加路径安全校验（仅相对路径），数值型配置增加类型容错，权限列表兼容数字类型群号
+- 配置界面优化：按「列表/调试/协议端/下载/权限」分组排序，提示语补充示例与取值说明
 
-日志输出
-普通模式（debug_mode: false）
-[QQFileManager] ✅ 初始化完成
-[QQFileManager] ✅ 成功创建文件夹: 测试文件夹
-[QQFileManager] ✅ 文件 'test.jpg' 已下载完成
-调试模式（debug_mode: true）
-[QQFileManager] 🔧 调试模式已开启，将显示详细日志
-[QQFileManager] 🔍 找到QQ适配器: qq
-[QQFileManager] 🔍 开始创建文件夹: 测试文件夹 (群: 878686562)
-[QQFileManager] 🔍 创建文件夹成功: 测试文件夹, ID: xxxxx
-[QQFileManager] 🔍 已清除群 878686562 的缓存
-[QQFileManager] 🔍 开始搜索文件: test.jpg
-[QQFileManager] 🔍 共获取到 3 个文件
-[QQFileManager] 🔍 找到匹配文件: test.jpg
-[QQFileManager] 🔍 开始下载文件: test.jpg -> D:\...\data\files\test.jpg
-[QQFileManager] 🔍 文件下载完成: test.jpg
+### v1.2.0
 
-#注意事项
-Bot 需要在群内拥有管理员权限才能执行创建/删除文件夹、删除文件、移动文件等操作
-删除文件夹前需确保文件夹为空
-下载链接有时效性，请尽快下载
-批量删除时，如部分文件删除失败会返回成功/失败统计
+- 新增 `qq_search_files` 关键词搜索群文件工具
+- 支持搜索根目录及全部文件夹，可通过 `folder_id/folder_name` 限定范围
+- 搜索结果包含文件位置、大小、上传者、日期和 `file_id`，可直接配合删除/移动工具
+- 搜索复用查看列表（`disabled_list_files`）的权限开关
 
+### v1.0.0
+
+- 初始版本
+- 支持文件列表、文件夹列表
+- 支持创建/删除文件夹
+- 支持删除文件
+- 支持移动文件
+- 支持异步下载文件
+- 支持群组权限管理
+- 支持调试模式
+
+<<<<<<< HEAD
 更新日志
 v1.4.1
 *修复适配器实例启动时缓存的问题：现每次调用实时解析，适配器配置热更新后无需重启插件即可生效
@@ -228,22 +209,6 @@ v1.0.0
 *支持异步下载文件
 *支持群组权限管理
 *支持调试模式
+=======
+>>>>>>> 524abc2a9ad44868e00df6fcfc101f9a2cae4220
 
-许可证
-MIT License
-'@
-Set-Content -Path "D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md" -Value $content -Encoding UTF8
-Write-Host "README.md 已创建成功！" -ForegroundColor Green
-### 方法三：使用 VS Code 或记事本
-1. 打开 VS Code 或记事本
-2. 将上面的 Markdown 内容复制进去
-3. 保存到 `D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager\README.md`
-4. 确保编码选择 UTF-8
-## 文件结构确认
-创建完成后，您的插件目录应该包含以下文件：
-D:\my-neuro-main\KiraAI-2.1.0\data\plugins\qq_file_manager
-├── init.py
-├── main.py
-├── manifest.json
-├── schema.json
-└── README.md ← 新创建的文件
