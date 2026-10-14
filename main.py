@@ -29,7 +29,6 @@ class QQFileManager(BasePlugin):
         super().__init__(ctx, cfg)
         self.download_history = {}
         self.history_file = None
-        self.qq_adapter = None
         self.download_timeout = 60
         self.pending_downloads = {}
         self._folder_cache = {}
@@ -39,9 +38,10 @@ class QQFileManager(BasePlugin):
         # 权限模式: "deny_list"(黑名单，默认) / "allow_list"(白名单)
         self.permission_mode = self._cfg.get("permission_mode", "deny_list")
         self.enabled_groups = []
-        # API 提供者: "auto" (自动探测), "napcat", "llonebot"
+        # API 提供者: "auto" (自动探测), "napcat", "llonebot"（手动配置，全局生效）
         self.api_provider = self._cfg.get("api_provider", "auto")
-        self._api_provider_detected = False  # 是否已探测成功
+        # per-adapter 探测缓存: {adapter_key: "napcat"|"llonebot"}，多账号各自记录
+        self._provider_cache = {}
 
     def _build_merged_cfg(self) -> dict:
         """合并折叠分组（section）嵌套配置与旧版扁平配置，section 优先，保证旧配置平滑兼容"""
@@ -57,9 +57,10 @@ class QQFileManager(BasePlugin):
 
     async def initialize(self):
         """插件初始化"""
-        self.qq_adapter = self._get_qq_adapter()
-        if not self.qq_adapter:
-            logger.warning("[QQFileManager] QQ适配器未找到，插件功能将不可用")
+        # 注意：适配器实例不在此处缓存——每次调用时从事件实时解析，
+        # 既支持适配器配置热更新（换实例无需重启），也支持多账号多实例分别路由
+        if not self._default_qq_adapter():
+            logger.warning("[QQFileManager] 当前未找到QQ适配器实例，插件功能暂不可用（适配器就绪后无需重启即可生效）")
             return
 
         # 读取调试模式配置（布尔开关）
@@ -151,28 +152,77 @@ class QQFileManager(BasePlugin):
         """错误日志（始终输出）"""
         logger.error(f"[QQFileManager] ❌ {msg}")
 
-    def _get_qq_adapter(self):
-        """获取QQ Adapter实例"""
+    def _get_adapters_snapshot(self) -> dict:
+        """实时获取适配器实例字典快照（每次现取不缓存引用，适配器配置热更新后自动生效）"""
         try:
-            adapters = {}
-            if hasattr(self.ctx.adapter_mgr, 'adapters'):
-                adapters = self.ctx.adapter_mgr.adapters
-            elif hasattr(self.ctx.adapter_mgr, '_adapters'):
-                adapters = self.ctx.adapter_mgr._adapters
-
-            for name, adapter in adapters.items():
-                if adapter.__class__.__name__ == "QQAdapter":
-                    self._log_debug(f"找到QQ适配器: {name}")
-                    return adapter
-
-            for attr_name in dir(self.ctx.adapter_mgr):
-                attr_val = getattr(self.ctx.adapter_mgr, attr_name)
-                if hasattr(attr_val, '__class__') and attr_val.__class__.__name__ == "QQAdapter":
-                    self._log_debug(f"通过属性找到QQ适配器: {attr_name}")
-                    return attr_val
+            mgr = self.ctx.adapter_mgr
+            if hasattr(mgr, 'adapters'):
+                return dict(mgr.adapters or {})
+            if hasattr(mgr, '_adapters'):
+                return dict(mgr._adapters or {})
         except Exception as e:
-            self._log_error(f"获取QQ适配器时出错: {e}")
+            self._log_error(f"获取适配器列表时出错: {e}")
+        return {}
+
+    @staticmethod
+    def _is_qq_adapter(adapter) -> bool:
+        if adapter is None:
+            return False
+        if adapter.__class__.__name__ == "QQAdapter":
+            return True
+        platform = str(getattr(getattr(adapter, "info", None), "platform", "") or "").lower()
+        return platform == "qq"
+
+    def _default_qq_adapter(self):
+        """兜底：实时取第一个QQ平台适配器实例（不缓存）"""
+        for adapter in self._get_adapters_snapshot().values():
+            if self._is_qq_adapter(adapter):
+                return adapter
         return None
+
+    def _resolve_adapter(self, event: KiraMessageBatchEvent):
+        """
+        从事件解析来源适配器实例（每次调用实时获取）。
+        多账号场景下确保 A 账号收到的消息用 A 账号的实例执行文件操作。
+        解析优先级：event.adapter.adapter_id → name（实例字典键/实例info.name）→ 第一个QQ实例。
+        """
+        snapshot = self._get_adapters_snapshot()
+        info = getattr(event, "adapter", None)
+        if info is not None and snapshot:
+            aid = getattr(info, "adapter_id", None)
+            if aid and snapshot.get(aid):
+                return snapshot[aid]
+            aname = getattr(info, "name", None)
+            if aname:
+                if snapshot.get(aname):
+                    return snapshot[aname]
+                for adapter in snapshot.values():
+                    if str(getattr(getattr(adapter, "info", None), "name", "") or "") == aname:
+                        return adapter
+        return self._default_qq_adapter()
+
+    @staticmethod
+    def _adapter_key(adapter) -> str:
+        """适配器实例的缓存键（优先 adapter_id，退化为对象 id）"""
+        info = getattr(adapter, "info", None)
+        return str(getattr(info, "adapter_id", None) or id(adapter))
+
+    @staticmethod
+    def _adapter_label(adapter) -> str:
+        """适配器实例的显示名（日志用）"""
+        info = getattr(adapter, "info", None)
+        return str(getattr(info, "name", None) or getattr(info, "adapter_id", None) or adapter.__class__.__name__)
+
+    def _api_provider_for(self, adapter) -> str:
+        """获取该适配器实例应使用的 API 提供者（手动配置优先，否则查 per-adapter 探测缓存）"""
+        if self.api_provider != "auto":
+            return self.api_provider
+        return self._provider_cache.get(self._adapter_key(adapter), "auto")
+
+    def _set_api_provider(self, adapter, provider: str):
+        """记录某适配器实例探测到的 API 提供者"""
+        if provider in ("napcat", "llonebot"):
+            self._provider_cache[self._adapter_key(adapter)] = provider
 
     def _get_group_id_from_event(self, event: KiraMessageBatchEvent) -> Optional[str]:
         if not event.messages:
@@ -183,14 +233,22 @@ class QQFileManager(BasePlugin):
         return None
 
     def _get_session_id_from_event(self, event: KiraMessageBatchEvent) -> Optional[str]:
-        """从事件中获取会话ID"""
-        if not event.messages:
-            return None
+        """从事件中获取会话ID（Kira 规范格式：{适配器实例名}:{gm|dm}:{会话ID}）"""
+        # 优先使用事件自带的 Session（由 Kira 按来源适配器实例构建）
+        session = getattr(event, "session", None)
+        sid = getattr(session, "sid", None) if session is not None else None
+        if sid:
+            return sid
+        # 兜底：手动构建，适配器实例名取自事件，不再写死 "qq"
+        adapter_name = "qq"
+        info = getattr(event, "adapter", None)
+        if info is not None:
+            adapter_name = str(getattr(info, "name", None) or getattr(info, "adapter_id", None) or "qq")
         for msg in event.messages:
             if msg.group and msg.group.group_id:
-                return f"qq:gm:{msg.group.group_id}"
+                return f"{adapter_name}:gm:{msg.group.group_id}"
             elif msg.sender and msg.sender.user_id:
-                return f"qq:dm:{msg.sender.user_id}"
+                return f"{adapter_name}:dm:{msg.sender.user_id}"
         return None
 
     def _is_feature_disabled(self, group_id: str, feature: str) -> bool:
@@ -237,12 +295,14 @@ class QQFileManager(BasePlugin):
             return False, f"{feature_names.get(feature, feature)}功能已在当前群禁用"
         return True, ""
 
-    async def _get_group_files_and_folders(self, group_id: str, file_count: int = None) -> tuple[List[Dict], List[Dict]]:
+    async def _get_group_files_and_folders(self, group_id: str, file_count: int = None, adapter=None) -> tuple[List[Dict], List[Dict]]:
         """获取根目录文件和文件夹"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return [], []
         try:
-            bot = self.qq_adapter.get_client()
+            bot = adapter.get_client()
             params = {"group_id": group_id}
             if file_count:
                 params["file_count"] = file_count
@@ -269,24 +329,26 @@ class QQFileManager(BasePlugin):
             self._log_error(f"获取列表异常: {e}")
             return [], []
 
-    async def _get_folder_files(self, group_id: str, folder_id: str, retry: int = 2, file_count: int = None) -> List[Dict]:
+    async def _get_folder_files(self, group_id: str, folder_id: str, retry: int = 2, file_count: int = None, adapter=None) -> List[Dict]:
         """获取文件夹内的文件，支持重试和缓存"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return []
-        
+
         clean_folder_id = folder_id.lstrip('/') if folder_id else folder_id
         cache_key = f"folder_files_{group_id}_{clean_folder_id}_{file_count or 'default'}"
         current_time = datetime.now().timestamp()
-        
+
         if cache_key in self._folder_cache:
             cache_time, cache_files = self._folder_cache[cache_key]
             if current_time - cache_time < 5:
                 self._log_debug(f"使用缓存: 文件夹 {folder_id} 内有 {len(cache_files)} 个文件")
                 return cache_files
-        
+
         for attempt in range(retry + 1):
             try:
-                bot = self.qq_adapter.get_client()
+                bot = adapter.get_client()
                 params = {
                     "group_id": group_id,
                     "folder_id": clean_folder_id
@@ -332,8 +394,8 @@ class QQFileManager(BasePlugin):
         
         return []
 
-    async def _get_folder_id_by_name(self, group_id: str, folder_name: str) -> Optional[str]:
-        _, folders = await self._get_group_files_and_folders(group_id)
+    async def _get_folder_id_by_name(self, group_id: str, folder_name: str, adapter=None) -> Optional[str]:
+        _, folders = await self._get_group_files_and_folders(group_id, adapter=adapter)
         for folder in folders:
             name = folder.get("folder_name", folder.get("name", ""))
             if name == folder_name:
@@ -342,13 +404,13 @@ class QQFileManager(BasePlugin):
                 return folder_id
         return None
 
-    async def _get_file_info_from_folder(self, group_id: str, file_name: str, folder_id: str = None) -> Optional[Dict]:
+    async def _get_file_info_from_folder(self, group_id: str, file_name: str, folder_id: str = None, adapter=None) -> Optional[Dict]:
         """从指定文件夹获取文件信息"""
         try:
             if folder_id:
-                files = await self._get_folder_files(group_id, folder_id)
+                files = await self._get_folder_files(group_id, folder_id, adapter=adapter)
             else:
-                files, _ = await self._get_group_files_and_folders(group_id)
+                files, _ = await self._get_group_files_and_folders(group_id, adapter=adapter)
 
             self._log_debug(f"共获取到 {len(files)} 个文件")
             
@@ -369,16 +431,16 @@ class QQFileManager(BasePlugin):
             self._log_error(f"获取文件信息异常: {e}")
             return None
 
-    async def _find_file_in_all_folders(self, group_id: str, file_name: str) -> Optional[Dict]:
+    async def _find_file_in_all_folders(self, group_id: str, file_name: str, adapter=None) -> Optional[Dict]:
         """递归搜索所有文件夹，查找文件"""
         self._log_debug(f"开始搜索文件: {file_name}")
-        
-        file_info = await self._get_file_info_from_folder(group_id, file_name, None)
+
+        file_info = await self._get_file_info_from_folder(group_id, file_name, None, adapter=adapter)
         if file_info:
             self._log_debug(f"在根目录找到文件: {file_name}")
             return file_info
 
-        _, folders = await self._get_group_files_and_folders(group_id)
+        _, folders = await self._get_group_files_and_folders(group_id, adapter=adapter)
         self._log_debug(f"找到 {len(folders)} 个文件夹，开始搜索...")
 
         for folder in folders:
@@ -389,7 +451,7 @@ class QQFileManager(BasePlugin):
 
             self._log_debug(f"搜索文件夹: {folder_name_display} (ID: {folder_id})")
             
-            file_info = await self._get_file_info_from_folder(group_id, file_name, folder_id)
+            file_info = await self._get_file_info_from_folder(group_id, file_name, folder_id, adapter=adapter)
             if file_info:
                 self._log_debug(f"在文件夹 {folder_name_display} 中找到文件: {file_name}")
                 file_info["current_folder_id"] = folder_id
@@ -398,13 +460,13 @@ class QQFileManager(BasePlugin):
         self._log_debug(f"未找到文件: {file_name}")
         return None
 
-    async def _find_file_matches_all(self, group_id: str, file_name: str) -> List[Dict]:
+    async def _find_file_matches_all(self, group_id: str, file_name: str, adapter=None) -> List[Dict]:
         """
         查找群内所有与文件名完全一致的文件（根目录 + 所有一级文件夹），附带位置信息。
         用于删除/重命名前的精确定位与同名歧义校验，避免连坐误删。
         """
         matches: List[Dict] = []
-        root_files, folders = await self._get_group_files_and_folders(group_id)
+        root_files, folders = await self._get_group_files_and_folders(group_id, adapter=adapter)
 
         def _scan(files: List[Dict], location: str, folder_id: str):
             for f in files:
@@ -424,23 +486,23 @@ class QQFileManager(BasePlugin):
             if not fid:
                 continue
             fname = folder.get("folder_name") or folder.get("name") or fid
-            fs = await self._get_folder_files(group_id, fid)
+            fs = await self._get_folder_files(group_id, fid, adapter=adapter)
             _scan(fs, fname, fid)
 
         self._log_debug(f"精确查找「{file_name}」: 命中 {len(matches)} 处")
         return matches
 
-    async def _get_folder_name_by_id(self, group_id: str, folder_id: str) -> Optional[str]:
+    async def _get_folder_name_by_id(self, group_id: str, folder_id: str, adapter=None) -> Optional[str]:
         """根据文件夹ID获取文件夹名称（兼容ID带不带 '/' 前缀两种形式）"""
         target = (folder_id or "").lstrip('/')
-        _, folders = await self._get_group_files_and_folders(group_id)
+        _, folders = await self._get_group_files_and_folders(group_id, adapter=adapter)
         for folder in folders:
             fid = folder.get("folder_id", folder.get("id", ""))
             if fid == folder_id or fid.lstrip('/') == target:
                 return folder.get("folder_name", folder.get("name", ""))
         return None
 
-    async def _collect_group_files(self, group_id: str, folder_id: str = None) -> tuple[List[Dict], str]:
+    async def _collect_group_files(self, group_id: str, folder_id: str = None, adapter=None) -> tuple[List[Dict], str]:
         """
         收集群文件并附带位置信息（每个文件 dict 增加 _location 和 _location_folder_id 字段）。
         folder_id 为 None：收集根目录及所有一级文件夹内的文件（顺序逐个拉取）。
@@ -448,23 +510,25 @@ class QQFileManager(BasePlugin):
         其他 folder_id：仅收集该文件夹内的文件。
         返回 (文件列表, 搜索范围名称)。
         """
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return [], ""
 
         count = self.SEARCH_FILE_COUNT
 
         # 限定根目录
         if folder_id == "/":
-            files, _ = await self._get_group_files_and_folders(group_id, file_count=count)
+            files, _ = await self._get_group_files_and_folders(group_id, file_count=count, adapter=adapter)
             tagged = [{**f, "_location": "根目录", "_location_folder_id": "/"} for f in files]
             self._log_debug(f"收集根目录文件 {len(tagged)} 个（用于搜索）")
             return tagged, "根目录"
 
         # 限定某个文件夹（folder_id 带不带 '/' 前缀均可，内部调用会自行清洗）
         if folder_id:
-            folder_name = await self._get_folder_name_by_id(group_id, folder_id)
+            folder_name = await self._get_folder_name_by_id(group_id, folder_id, adapter=adapter)
             scope = folder_name or folder_id
-            files = await self._get_folder_files(group_id, folder_id, file_count=count)
+            files = await self._get_folder_files(group_id, folder_id, file_count=count, adapter=adapter)
             tagged = [{**f, "_location": scope, "_location_folder_id": folder_id} for f in files]
             self._log_debug(f"收集文件夹 {scope} 内文件 {len(tagged)} 个（用于搜索）")
             return tagged, f"文件夹「{scope}」"
@@ -472,7 +536,7 @@ class QQFileManager(BasePlugin):
         # 全量收集：根目录 + 顺序遍历所有一级文件夹。
         # 注意：必须逐个顺序请求，不能并发——NapCat/LLOneBot 对群文件接口的瞬时
         # 并发请求会失败/限流，导致各文件夹全部静默返回空（与 _find_file_in_all_folders 保持一致）。
-        root_files, folders = await self._get_group_files_and_folders(group_id, file_count=count)
+        root_files, folders = await self._get_group_files_and_folders(group_id, file_count=count, adapter=adapter)
         collected = [{**f, "_location": "根目录", "_location_folder_id": "/"} for f in root_files]
 
         for index, folder in enumerate(folders, 1):
@@ -483,7 +547,7 @@ class QQFileManager(BasePlugin):
                 continue
             fname = folder.get("folder_name") or folder.get("name") or fid
 
-            fs = await self._get_folder_files(group_id, fid, file_count=count)
+            fs = await self._get_folder_files(group_id, fid, file_count=count, adapter=adapter)
             if fs:
                 collected.extend({**f, "_location": fname, "_location_folder_id": fid} for f in fs)
             elif int(folder.get("total_file_count", 0) or 0) > 0:
@@ -513,12 +577,14 @@ class QQFileManager(BasePlugin):
 
     # ========== API 方法 ==========
 
-    async def _create_folder_api(self, group_id: str, folder_name: str) -> Optional[str]:
+    async def _create_folder_api(self, group_id: str, folder_name: str, adapter=None) -> Optional[str]:
         """创建群文件夹（兼容 NapCat 和 LLOneBot）"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return None
         try:
-            bot = self.qq_adapter.get_client()
+            bot = adapter.get_client()
             # 同时传递 folder_name 和 name，确保两种实现都能识别
             result = await bot.send_action(
                 "create_group_file_folder",
@@ -553,12 +619,14 @@ class QQFileManager(BasePlugin):
             self._log_error(f"创建文件夹异常: {e}")
             return None
 
-    async def _delete_folder_api(self, group_id: str, folder_id: str) -> bool:
+    async def _delete_folder_api(self, group_id: str, folder_id: str, adapter=None) -> bool:
         """删除群文件夹"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return False
         try:
-            bot = self.qq_adapter.get_client()
+            bot = adapter.get_client()
             result = await bot.send_action(
                 "delete_group_folder",
                 {"group_id": group_id, "folder_id": folder_id}
@@ -577,12 +645,14 @@ class QQFileManager(BasePlugin):
             self._log_error(f"删除文件夹异常: {e}")
             return False
 
-    async def _delete_file_api(self, group_id: str, file_id: str) -> bool:
+    async def _delete_file_api(self, group_id: str, file_id: str, adapter=None) -> bool:
         """删除群文件"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return False
         try:
-            bot = self.qq_adapter.get_client()
+            bot = adapter.get_client()
             result = await bot.send_action(
                 "delete_group_file",
                 {"group_id": group_id, "file_id": file_id}
@@ -602,9 +672,11 @@ class QQFileManager(BasePlugin):
             return False
 
     async def _rename_file_api(self, group_id: str, file_id: str,
-                               current_parent_directory: str, new_name: str) -> tuple[bool, str]:
+                               current_parent_directory: str, new_name: str, adapter=None) -> tuple[bool, str]:
         """重命名群文件（NapCat: rename_group_file，需父目录；其他协议端自动探测参数变体）"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return False, "QQ适配器未就绪"
 
         clean_dir = "/" if not current_parent_directory or current_parent_directory == "/" else current_parent_directory.lstrip('/')
@@ -623,11 +695,13 @@ class QQFileManager(BasePlugin):
                 "new_file_name": new_name  # 参数名变体兼容
             }),
         ]
-        return await self._probe_rename_actions(attempts, f"文件 {file_id}")
+        return await self._probe_rename_actions(attempts, f"文件 {file_id}", adapter=adapter)
 
-    async def _rename_folder_api(self, group_id: str, folder_id: str, new_folder_name: str) -> tuple[bool, str]:
+    async def _rename_folder_api(self, group_id: str, folder_id: str, new_folder_name: str, adapter=None) -> tuple[bool, str]:
         """重命名群文件夹（LLOneBot: rename_group_folder；其他协议端自动探测）"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return False, "QQ适配器未就绪"
 
         attempts = [
@@ -642,11 +716,15 @@ class QQFileManager(BasePlugin):
                 "name": new_folder_name  # 参数名变体兼容
             }),
         ]
-        return await self._probe_rename_actions(attempts, f"文件夹 {folder_id}")
+        return await self._probe_rename_actions(attempts, f"文件夹 {folder_id}", adapter=adapter)
 
-    async def _probe_rename_actions(self, attempts: List[tuple], target_desc: str) -> tuple[bool, str]:
+    async def _probe_rename_actions(self, attempts: List[tuple], target_desc: str, adapter=None) -> tuple[bool, str]:
         """依次尝试重命名接口的多种参数格式，全部失败时返回最后一次的错误信息"""
-        bot = self.qq_adapter.get_client()
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
+            return False, "QQ适配器未就绪"
+        bot = adapter.get_client()
         last_msg = ""
         for action, params in attempts:
             try:
@@ -669,9 +747,11 @@ class QQFileManager(BasePlugin):
         return False, "当前协议端可能不支持该重命名接口"
 
 
-    async def _move_file_to_folder(self, group_id: str, file_uuid: str, current_folder_id: str, target_folder_id: str, file_name: str = "") -> tuple[bool, str]:
+    async def _move_file_to_folder(self, group_id: str, file_uuid: str, current_folder_id: str, target_folder_id: str, file_name: str = "", adapter=None) -> tuple[bool, str]:
         """移动文件到指定文件夹（支持内存记录 + 自动回退）"""
-        if not self.qq_adapter:
+        if adapter is None:
+            adapter = self._default_qq_adapter()
+        if not adapter:
             return False, "QQ适配器未就绪"
 
         clean_current = "/" if not current_folder_id or current_folder_id == "/" else current_folder_id.lstrip('/')
@@ -697,7 +777,7 @@ class QQFileManager(BasePlugin):
         async def try_move(provider: str) -> tuple[bool, str]:
             self._log_debug(f"尝试 {provider} 格式移动文件: {file_name}")
             try:
-                bot = self.qq_adapter.get_client()
+                bot = adapter.get_client()
                 result = await bot.send_action("move_group_file", build_params(provider))
                 if not result:
                     return False, "API返回为空"
@@ -711,32 +791,33 @@ class QQFileManager(BasePlugin):
             except Exception as e:
                 return False, str(e)
 
-        # 确定尝试顺序
-        if self.api_provider == "auto":
+        # 确定尝试顺序（provider 按适配器实例分别记录，多账号互不干扰）
+        current_provider = self._api_provider_for(adapter)
+        if current_provider == "auto":
             # 未探测过，按顺序尝试 napcat -> llonebot
             providers = ["napcat", "llonebot"]
         else:
             # 已记录 provider，先尝试记录的，如果失败且错误特征符合则回退另一种
-            providers = [self.api_provider]
+            providers = [current_provider]
             # 回退时的另一种
-            fallback = "llonebot" if self.api_provider == "napcat" else "napcat"
+            fallback = "llonebot" if current_provider == "napcat" else "napcat"
 
         # 第一次尝试
         success, msg = await try_move(providers[0])
         if success:
             # 成功，如果之前是 auto 则记录
-            if self.api_provider == "auto":
-                self.api_provider = providers[0]
-                self._log_info(f"自适应检测到 API 提供者: {self.api_provider}")
+            if current_provider == "auto":
+                self._set_api_provider(adapter, providers[0])
+                self._log_info(f"自适应检测到 API 提供者: {providers[0]}（{self._adapter_label(adapter)}）")
             return True, ""
 
         # 第一次失败，检查是否需要回退
         need_fallback = False
-        if self.api_provider != "auto":
+        if current_provider != "auto":
             # 已记录的 provider 失败，检查错误特征是否是格式不匹配
             if "parent_directory missing required value" in msg or "target_directory" in msg.lower():
                 need_fallback = True
-                self._log_debug(f"当前 provider ({self.api_provider}) 格式失败，尝试回退到另一种格式")
+                self._log_debug(f"当前 provider ({current_provider}) 格式失败，尝试回退到另一种格式")
         else:
             # 自动模式第一次失败，尝试第二种
             need_fallback = True
@@ -745,9 +826,9 @@ class QQFileManager(BasePlugin):
             fallback_provider = providers[1] if len(providers) > 1 else fallback
             success2, msg2 = await try_move(fallback_provider)
             if success2:
-                # 回退成功，更新内存中的 provider
-                self.api_provider = fallback_provider
-                self._log_info(f"自适应切换 API 提供者: {fallback_provider}")
+                # 回退成功，更新该实例记录的 provider
+                self._set_api_provider(adapter, fallback_provider)
+                self._log_info(f"自适应切换 API 提供者: {fallback_provider}（{self._adapter_label(adapter)}）")
                 return True, ""
             else:
                 return False, msg2
@@ -767,16 +848,21 @@ class QQFileManager(BasePlugin):
         except Exception as e:
             self._log_error(f"发送通知失败: {e}")
 
-    async def _download_file_async(self, group_id: str, file_name: str, task_id: str, session_id: str = None):
-        """异步下载文件"""
+    async def _download_file_async(self, group_id: str, file_name: str, task_id: str, session_id: str = None, adapter=None):
+        """异步下载文件（adapter 为创建任务时解析好的来源实例，后台使用同一实例）"""
         try:
-            file_info = await self._find_file_in_all_folders(group_id, file_name)
+            file_info = await self._find_file_in_all_folders(group_id, file_name, adapter=adapter)
             if not file_info or not file_info.get("file_id"):
                 self.pending_downloads[task_id] = {"status": "failed", "error": f"未找到文件: {file_name}"}
                 return
 
             current_file_id = file_info["file_id"]
-            bot = self.qq_adapter.get_client()
+            if adapter is None:
+                adapter = self._default_qq_adapter()
+            if not adapter:
+                self.pending_downloads[task_id] = {"status": "failed", "error": "QQ适配器未就绪"}
+                return
+            bot = adapter.get_client()
             result = await bot.send_action(
                 "get_group_file_url",
                 {"group_id": group_id, "file_id": current_file_id}
@@ -979,7 +1065,11 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
-        files, folders = await self._get_group_files_and_folders(group_id)
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
+        files, folders = await self._get_group_files_and_folders(group_id, adapter=adapter)
         return self._format_file_list(files, folders, self.max_files_list)
 
     @tool(
@@ -1006,15 +1096,19 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         if not folder_id and folder_name:
-            folder_id = await self._get_folder_id_by_name(group_id, folder_name)
+            folder_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
             if not folder_id:
                 return f"❌ 未找到文件夹: {folder_name}"
 
         if not folder_id:
             return "❌ 请提供文件夹ID或文件夹名称"
 
-        files = await self._get_folder_files(group_id, folder_id)
+        files = await self._get_folder_files(group_id, folder_id, adapter=adapter)
         if not files:
             return f"📂 文件夹内没有文件"
 
@@ -1052,6 +1146,10 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         keyword = (keyword or "").strip()
         if not keyword:
             return "❌ 搜索关键词不能为空"
@@ -1066,13 +1164,13 @@ class QQFileManager(BasePlugin):
             if folder_name in ("根目录", "/"):
                 target_folder_id = "/"
             else:
-                target_folder_id = await self._get_folder_id_by_name(group_id, folder_name)
+                target_folder_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
                 if not target_folder_id:
                     return f"❌ 未找到文件夹: {folder_name}"
 
         self._log_debug(f"搜索文件: 群={group_id}, 关键词='{keyword}', 范围={target_folder_id or '全部'}")
 
-        all_files, scope = await self._collect_group_files(group_id, target_folder_id)
+        all_files, scope = await self._collect_group_files(group_id, target_folder_id, adapter=adapter)
 
         # 范围为空（如空文件夹）属于正常情况，走统一的无匹配输出，不报错
         matched_files = self._match_files_by_keyword(all_files, keyword)
@@ -1101,17 +1199,21 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         if not folder_name or len(folder_name.strip()) == 0:
             return "❌ 文件夹名称不能为空"
 
         if len(folder_name) > 50:
             return "❌ 文件夹名称过长"
 
-        existing_id = await self._get_folder_id_by_name(group_id, folder_name)
+        existing_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
         if existing_id:
             return f"📁 文件夹 '{folder_name}' 已存在"
 
-        result = await self._create_folder_api(group_id, folder_name)
+        result = await self._create_folder_api(group_id, folder_name, adapter=adapter)
         if result:
             await self._clear_cache(group_id)
             return f"✅ 成功创建文件夹: {folder_name}"
@@ -1142,19 +1244,23 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         if not folder_id and not folder_name:
             return "❌ 请提供文件夹名称或文件夹ID"
 
         if not folder_id and folder_name:
-            folder_id = await self._get_folder_id_by_name(group_id, folder_name)
+            folder_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
             if not folder_id:
                 return f"❌ 未找到文件夹: {folder_name}"
 
-        files = await self._get_folder_files(group_id, folder_id)
+        files = await self._get_folder_files(group_id, folder_id, adapter=adapter)
         if files and len(files) > 0:
             return f"❌ 文件夹不为空，请先删除文件夹内的 {len(files)} 个文件"
 
-        success = await self._delete_folder_api(group_id, folder_id)
+        success = await self._delete_folder_api(group_id, folder_id, adapter=adapter)
         if success:
             await self._clear_cache(group_id)
             return f"✅ 成功删除文件夹: {folder_name or folder_id}"
@@ -1185,6 +1291,10 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         if not file_ids and not file_names:
             return "❌ 请提供要删除的文件名或文件ID"
 
@@ -1200,7 +1310,7 @@ class QQFileManager(BasePlugin):
         missing_names = []
         if file_names:
             for name in file_names:
-                matches = await self._find_file_matches_all(group_id, name)
+                matches = await self._find_file_matches_all(group_id, name, adapter=adapter)
                 if not matches:
                     missing_names.append(name)
                     continue
@@ -1225,7 +1335,7 @@ class QQFileManager(BasePlugin):
         fail_count = 0
 
         for file_id in delete_ids:
-            success = await self._delete_file_api(group_id, file_id)
+            success = await self._delete_file_api(group_id, file_id, adapter=adapter)
             if success:
                 success_count += 1
             else:
@@ -1268,23 +1378,27 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         target_folder_id = None
         if folder_name == "根目录" or folder_name == "/" or folder_name == "":
             target_folder_id = "/"
         else:
-            target_folder_id = await self._get_folder_id_by_name(group_id, folder_name)
+            target_folder_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
 
         if not target_folder_id:
             return f"❌ 未找到文件夹: {folder_name}"
 
-        file_info = await self._find_file_in_all_folders(group_id, file_name)
+        file_info = await self._find_file_in_all_folders(group_id, file_name, adapter=adapter)
         if not file_info or not file_info.get("file_uuid"):
             return f"❌ 未找到文件: {file_name}"
 
         file_uuid = file_info["file_uuid"]
         current_folder_id = file_info.get("current_folder_id", "/")
 
-        success, msg = await self._move_file_to_folder(group_id, file_uuid, current_folder_id, target_folder_id, file_name)
+        success, msg = await self._move_file_to_folder(group_id, file_uuid, current_folder_id, target_folder_id, file_name, adapter=adapter)
         if success:
             await self._clear_cache(group_id)
             if target_folder_id == "/":
@@ -1318,6 +1432,10 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         new_name = (new_name or "").strip()
         if not new_name:
             return "❌ 新文件名不能为空"
@@ -1328,7 +1446,7 @@ class QQFileManager(BasePlugin):
 
         if file_name:
             # 按名称定位：同名多处时拒绝，防止改错文件
-            matches = await self._find_file_matches_all(group_id, file_name)
+            matches = await self._find_file_matches_all(group_id, file_name, adapter=adapter)
             if not matches:
                 return f"❌ 未找到文件: {file_name}"
             if len(matches) > 1:
@@ -1340,7 +1458,7 @@ class QQFileManager(BasePlugin):
             old_name = file_name
         else:
             # 按ID定位：扫描全群找到 file_id 实际所在文件夹，作为重命名所需的父目录
-            all_files, _ = await self._collect_group_files(group_id, None)
+            all_files, _ = await self._collect_group_files(group_id, None, adapter=adapter)
             entry = next((f for f in all_files if f.get("file_id", f.get("id", "")) == file_id), None)
             if entry:
                 target = {
@@ -1354,7 +1472,7 @@ class QQFileManager(BasePlugin):
                 target = {"file_id": file_id, "folder_id": "/", "location": None}
                 old_name = file_id
 
-        success, msg = await self._rename_file_api(group_id, target["file_id"], target.get("folder_id", "/"), new_name)
+        success, msg = await self._rename_file_api(group_id, target["file_id"], target.get("folder_id", "/"), new_name, adapter=adapter)
         if success:
             await self._clear_cache(group_id)
             location = target.get("location")
@@ -1387,6 +1505,10 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
         new_folder_name = (new_folder_name or "").strip()
         if not new_folder_name:
             return "❌ 新文件夹名不能为空"
@@ -1395,16 +1517,16 @@ class QQFileManager(BasePlugin):
 
         if folder_id:
             target_id = folder_id
-            old_name = await self._get_folder_name_by_id(group_id, folder_id) or folder_id
+            old_name = await self._get_folder_name_by_id(group_id, folder_id, adapter=adapter) or folder_id
         elif folder_name:
-            target_id = await self._get_folder_id_by_name(group_id, folder_name)
+            target_id = await self._get_folder_id_by_name(group_id, folder_name, adapter=adapter)
             if not target_id:
                 return f"❌ 未找到文件夹: {folder_name}"
             old_name = folder_name
         else:
             return "❌ 请提供 folder_id 或 folder_name"
 
-        success, msg = await self._rename_folder_api(group_id, target_id, new_folder_name)
+        success, msg = await self._rename_folder_api(group_id, target_id, new_folder_name, adapter=adapter)
         if success:
             await self._clear_cache(group_id)
             return f"✅ 已将文件夹 {old_name} 重命名为 {new_folder_name}"
@@ -1432,7 +1554,11 @@ class QQFileManager(BasePlugin):
         if not allowed:
             return f"❌ {msg}"
 
-        file_info = await self._find_file_in_all_folders(group_id, file_name)
+        adapter = self._resolve_adapter(event)
+        if not adapter:
+            return "❌ 未找到可用的QQ适配器实例，请检查Kira适配器配置"
+
+        file_info = await self._find_file_in_all_folders(group_id, file_name, adapter=adapter)
         if not file_info or not file_info.get("file_id"):
             return f"❌ 未找到文件: {file_name}"
 
@@ -1442,10 +1568,10 @@ class QQFileManager(BasePlugin):
             return not_allowed
 
         session_id = self._get_session_id_from_event(event)
-        
+
         task_id = f"{group_id}_{file_name}_{int(datetime.now().timestamp())}"
         self.pending_downloads[task_id] = {"status": "pending"}
-        asyncio.create_task(self._download_file_async(group_id, file_name, task_id, session_id))
+        asyncio.create_task(self._download_file_async(group_id, file_name, task_id, session_id, adapter=adapter))
         
         return f"✅ 已开始下载: {file_name}\n📋 任务ID: {task_id}\n⏰ 下载完成后我会通知你~"
 
